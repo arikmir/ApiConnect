@@ -1,0 +1,145 @@
+version: '3.8'
+
+services:
+  # Infrastructure
+  postgres:
+    image: postgres:16-alpine
+    container_name: api-marketplace-postgres
+    environment:
+      POSTGRES_USER: apimarketplace
+      POSTGRES_PASSWORD: development123
+      POSTGRES_DB: apimarketplace
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - api-marketplace-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U apimarketplace"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: api-marketplace-redis
+    ports:
+      - "6379:6379"
+    networks:
+      - api-marketplace-network
+
+  rabbitmq:
+    image: rabbitmq:3-management
+    container_name: api-marketplace-rabbitmq
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    environment:
+      RABBITMQ_DEFAULT_USER: admin
+      RABBITMQ_DEFAULT_PASS: admin123
+    networks:
+      - api-marketplace-network
+
+  # API Gateway
+  gateway:
+    build:
+      context: .
+      dockerfile: Dockerfile.gateway
+    container_name: api-marketplace-gateway
+    ports:
+      - "5000:80"
+    depends_on:
+      - identity-service
+      - connector-service
+      - integration-service
+      - monitoring-service
+    networks:
+      - api-marketplace-network
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+
+  # Microservices
+  identity-service:
+    build:
+      context: .
+      dockerfile: Dockerfile.identity
+    container_name: api-marketplace-identity
+    ports:
+      - "5001:80"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - api-marketplace-network
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - ConnectionStrings__DefaultConnection=Host=postgres;Port=5432;Database=apimarketplace;Username=apimarketplace;Password=development123
+
+  connector-service:
+    build:
+      context: .
+      dockerfile: Dockerfile.connector
+    container_name: api-marketplace-connector
+    ports:
+      - "5002:80"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - api-marketplace-network
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - ConnectionStrings__DefaultConnection=Host=postgres;Port=5432;Database=apimarketplace;Username=apimarketplace;Password=development123
+
+  integration-service:
+    build:
+      context: .
+      dockerfile: Dockerfile.integration
+    container_name: api-marketplace-integration
+    ports:
+      - "5003:80"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - api-marketplace-network
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - ConnectionStrings__DefaultConnection=Host=postgres;Port=5432;Database=apimarketplace;Username=apimarketplace;Password=development123
+
+  monitoring-service:
+    build:
+      context: .
+      dockerfile: Dockerfile.monitoring
+    container_name: api-marketplace-monitoring
+    ports:
+      - "5004:80"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - api-marketplace-network
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - ConnectionStrings__DefaultConnection=Host=postgres;Port=5432;Database=apimarketplace;Username=apimarketplace;Password=development123
+
+  # Frontend
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile.frontend
+    container_name: api-marketplace-frontend
+    ports:
+      - "4200:80"
+    depends_on:
+      - gateway
+    networks:
+      - api-marketplace-network
+
+volumes:
+  postgres_data:
+
+networks:
+  api-marketplace-network:
+    driver: bridge
