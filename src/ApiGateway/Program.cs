@@ -9,17 +9,22 @@ builder.Services.AddOcelot();
 // CORS
 builder.Services.AddCors(options =>
 {
-    options.AddPolicy("AllowAll", builder =>
+    options.AddPolicy("AllowAngular", builder =>
     {
-        builder.AllowAnyOrigin()
+        builder.WithOrigins("http://localhost:4200")
                .AllowAnyMethod()
-               .AllowAnyHeader();
+               .AllowAnyHeader()
+               .AllowCredentials();
     });
 });
 
 var app = builder.Build();
 
-app.UseCors("AllowAll");
+app.UseCors("AllowAngular");
+
+// Health check endpoint
+app.MapGet("/health", () => Results.Ok(new { status = "healthy", service = "ApiGateway", timestamp = DateTime.UtcNow }));
+
 await app.UseOcelot();
 
 app.Run();
